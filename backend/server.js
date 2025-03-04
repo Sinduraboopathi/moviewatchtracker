@@ -3,8 +3,8 @@ import express from 'express';
 import cors from 'cors';
 import sequelize from './config/database.js';
 import authenticateToken from './middleware/authenticateToken.js';
-import * as authController from './controllers/authController.js';
-import * as movieController from './controllers/movieController.js';
+import * as authController from './controllers/auth.controller.js';
+import * as movieController from './controllers/movie.controller.js';
 
 dotenv.config();
 const app = express();

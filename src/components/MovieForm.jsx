@@ -14,7 +14,6 @@ import CloseIcon from '@mui/icons-material/Close';
 import { styled } from '@mui/material/styles';
 import { autocompleteClasses } from '@mui/material/Autocomplete';
 
-
 const genres = [
   "Action", "Comedy", "Drama", "Fantasy", "Horror", "Mystery", "Romance", "Thriller", "Sci-Fi", "Animation"
 ];
@@ -106,7 +105,7 @@ function MovieForm({ movie, onClose }) {
             <Rating
               name="rating"
               value={formData.rating}
-              precision={0.5}
+              precision={1}
               onChange={(event, newValue) => setFormData({ ...formData, rating: newValue })}
               onChangeActive={(_, newHover) => setHover(newHover)}
               emptyIcon={<StarIcon style={{ opacity: 0.55 }} fontSize="inherit" />}
@@ -116,6 +115,25 @@ function MovieForm({ movie, onClose }) {
             )}
           </Box>
         </div>
+
+        {/* <div className="form-group">
+  <label>Rating:</label>
+  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+    <Rating
+      name="rating"
+      value={formData.rating}
+      precision={0.5}
+      onChange={(event, newValue) => setFormData({ ...formData, rating: newValue || 0 })}
+      onChangeActive={(_, newHover) => setHover(newHover)}
+      emptyIcon={<StarIcon style={{ opacity: 0.55 }} fontSize="inherit" />}
+      disabled={formData.status !== "Watched"} 
+    />
+    {formData.rating !== null && (
+      <Box sx={{ ml: 2 }}>{labels[hover !== -1 ? hover : formData.rating]}</Box>
+    )}
+  </Box>
+</div> */}
+
 
         <div className="form-group">
 

@@ -126,3 +126,12 @@ a {
     text-decoration: underline;
   }
 }
+
+small.error {
+  display: block;
+  font-size: 12px;
+  color: red;
+  word-wrap: break-word;
+  white-space: normal; /* Allows wrapping */
+  max-width: 100%; /* Ensures it takes full width */
+}

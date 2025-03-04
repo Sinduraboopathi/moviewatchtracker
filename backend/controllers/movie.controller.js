@@ -1,4 +1,4 @@
-import Movie from '../models/Movie.js';
+import Movie from '../models/movie.model.js';
 import { Op } from 'sequelize';
 
 export const getMovies = async (req, res) => {

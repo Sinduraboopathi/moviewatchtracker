@@ -33,7 +33,7 @@ const MovieTable = () => {
     if (window.confirm("Are you sure you want to delete this movie?")) {
       try {
         await axios.delete(`http://localhost:5000/api/movies/${id}`);
-        fetchMovies(); // Refresh the list
+        fetchMovies(); 
       } catch (error) {
         console.error("Error deleting movie:", error);
       }

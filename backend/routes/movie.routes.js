@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { getMovies, createMovie, updateMovie, deleteMovie } = require("../controllers/movieController");
+const { getMovies, createMovie, updateMovie, deleteMovie } = require("../controllers/movie.controller");
 const authMiddleware = require("../middleware/authMiddleware");
 
 router.get("/", authMiddleware, getMovies);

@@ -9,8 +9,13 @@ function MovieList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('title');
-  const { movies, totalMovies, currentPage, fetchMovies, deleteMovie } = useMovieStore();
+  // const { movies, totalMovies, currentPage, fetchMovies, deleteMovie } = useMovieStore();
   const { username, logout } = useAuthStore();
+  const [movies, setMovies] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
   const navigate = useNavigate();
   const ITEMS_PER_PAGE = 10;
 
