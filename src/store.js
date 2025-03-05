@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import axios from 'axios';
 
 const API_URL = 'http://localhost:5000';
+
 export const useAuthStore = create((set) => ({
   token: localStorage.getItem('token') || null,
   username: localStorage.getItem('username') || null,
@@ -11,68 +12,108 @@ export const useAuthStore = create((set) => ({
     try {
       const response = await axios.post(`${API_URL}/login`, { email, password });
       const { token, username } = response.data;
-      
+
       localStorage.setItem('token', token);
       localStorage.setItem('username', username);
-      
+
       set({ token, username, isAuthenticated: true });
       return { success: true };
     } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Login failed' 
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Login failed',
       };
     }
   },
-  
+
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('username');
     set({ token: null, username: null, isAuthenticated: false });
-  }
+  },
 }));
+
 export const useMovieStore = create((set, get) => ({
   movies: [],
   totalMovies: 0,
-  currentPage: 1,
+  offset: 0,
   loading: false,
   error: null,
 
-  fetchMovies: async (page = 1, search = '', sort = 'title', limit = 10) => {
+  fetchMovies: async (offset = 0, search = '', sort = 'title', limit = 10) => {
     try {
       set({ loading: true, error: null });
-      
+
       const queryParams = new URLSearchParams({
-        page,
+        offset,
         limit,
         ...(search && { search }),
-        sort
+        sort,
       }).toString();
-      
+
       console.log(`Fetching movies with query: ${queryParams}`);
-      
+
       const token = localStorage.getItem('token');
       const response = await axios.get(`${API_URL}/movies?${queryParams}`, {
         headers: {
-          Authorization: `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
-      
+
       console.log('Movies response:', response.data);
-      
-      set({ 
-        movies: response.data.movies, 
+
+      set((state) => ({
+        movies: offset === 0 ? response.data.movies : [...state.movies, ...response.data.movies],
         totalMovies: response.data.totalMovies,
-        currentPage: response.data.currentPage,
-        loading: false 
-      });
-      
+        offset: offset + response.data.movies.length,
+        loading: false,
+      }));
+
       return response.data;
     } catch (error) {
       console.error('Error fetching movies:', error);
-      set({ 
-        error: error.response?.data?.message || 'Failed to fetch movies', 
-        loading: false 
+      set({
+        error: error.response?.data?.message || 'Failed to fetch movies',
+        loading: false,
+      });
+      return { movies: [], totalMovies: 0 };
+    }
+  },
+
+  fetchTableMovies: async (offset = 0, search = '', sortBy = 'title_asc', limit = 10) => {
+    try {
+      set({ loading: true, error: null });
+
+      const queryParams = new URLSearchParams({
+        offset,
+        limit,
+        ...(search && { search }),
+        sortBy,
+      }).toString();
+
+      console.log(`Fetching table movies with query: ${queryParams}`);
+
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_URL}/movies/table?${queryParams}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log('Table Movies response:', response.data);
+
+      set({
+        movies: response.data.movies,
+        totalMovies: response.data.totalMovies,
+        loading: false,
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching table movies:', error);
+      set({
+        error: error.response?.data?.message || 'Failed to fetch table movies',
+        loading: false,
       });
       return { movies: [], totalMovies: 0 };
     }
@@ -81,91 +122,73 @@ export const useMovieStore = create((set, get) => ({
   addMovie: async (movieData) => {
     try {
       set({ loading: true, error: null });
-      
+
       const token = localStorage.getItem('token');
       const response = await axios.post(`${API_URL}/movies`, movieData, {
         headers: {
-          Authorization: `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
-      
-      await get().fetchMovies(get().currentPage);
-      
+
+      await get().fetchMovies(0, get().search, get().sort, 10);
+
       set({ loading: false });
       return response.data;
     } catch (error) {
-      set({ 
-        error: error.response?.data?.message || 'Failed to add movie', 
-        loading: false 
+      set({
+        error: error.response?.data?.message || 'Failed to add movie',
+        loading: false,
       });
       throw error;
     }
   },
-
 
   updateMovie: async (id, movieData) => {
     try {
       set({ loading: true, error: null });
-      
+
       const token = localStorage.getItem('token');
-      const response = await axios.put(`${API_URL}/movies/${id}`, movieData, {
+      await axios.put(`${API_URL}/movies/${id}`, movieData, {
         headers: {
-          Authorization: `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
-    
-      set(state => ({
-        movies: state.movies.map(movie => 
-          movie.id === id ? { ...movie, ...movieData } : movie
-        ),
-        loading: false
-      }));
-      
-      return response.data;
+      await get().fetchTableMovies((get().page-1) * get().limit, get().searchTerm, `${get().sortField}_${get().sortOrder}`, get().limit);
+      set({ loading: false });
+      return {success: true};
     } catch (error) {
-      set({ 
-        error: error.response?.data?.message || 'Failed to update movie', 
-        loading: false 
+      set({
+        error: error.response?.data?.message || 'Failed to update movie',
+        loading: false,
       });
-      throw error;
+      return {success: false, message: error.response?.data?.message || 'Failed to update movie'};
     }
   },
-
 
   deleteMovie: async (id) => {
     try {
       set({ loading: true, error: null });
-      
+
       const token = localStorage.getItem('token');
-      const response = await axios.delete(`${API_URL}/movies/${id}`, {
+      await axios.delete(`${API_URL}/movies/${id}`, {
         headers: {
-          Authorization: `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
-    
-      set(state => {
-        const newMovies = state.movies.filter(movie => movie.id !== id);
-        let newPage = state.currentPage;
-        if (newMovies.length === 0 && state.currentPage > 1) {
-          newPage = state.currentPage - 1;
-          get().fetchMovies(newPage);
-        }
-        
-        return {
-          movies: newMovies,
-          totalMovies: state.totalMovies - 1,
-          currentPage: newPage,
-          loading: false
-        };
-      });
-      
-      return response.data;
+      await get().fetchTableMovies((get().page-1) * get().limit, get().searchTerm, `${get().sortField}_${get().sortOrder}`, get().limit);
+      set({ loading: false });
+      return {success: true};
     } catch (error) {
-      set({ 
-        error: error.response?.data?.message || 'Failed to delete movie', 
-        loading: false 
+      set({
+        error: error.response?.data?.message || 'Failed to delete movie',
+        loading: false,
       });
-      throw error;
+      return {success: false, message: error.response?.data?.message || 'Failed to delete movie'};
     }
-  }
+  },
+  page: 1,
+  limit: 10,
+  sortField: 'title',
+  sortOrder: 'asc',
+  searchTerm: '',
 }));

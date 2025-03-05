@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMovieStore, useAuthStore } from '../store';
 import MovieForm from './MovieForm';
@@ -9,21 +9,16 @@ function MovieList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('title');
-  // const { movies, totalMovies, currentPage, fetchMovies, deleteMovie } = useMovieStore();
   const { username, logout } = useAuthStore();
   const [movies, setMovies] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-
   const navigate = useNavigate();
-  const ITEMS_PER_PAGE = 10;
+  const LIMIT = 50;
+  const listRef = useRef(null);
+  const [offset, setOffset] = useState(0);
 
-  useEffect(() => {
-    console.log("Initial loading of movies");
-    fetchMovies(1, '', 'title', ITEMS_PER_PAGE);
-  }, []);
-
+  const { totalMovies, deleteMovie, fetchMovies: fetchMoviesFromStore } = useMovieStore();
 
   useEffect(() => {
     console.log(`Setting up search debounce for: "${searchTerm}"`);
@@ -34,24 +29,38 @@ function MovieList() {
     return () => clearTimeout(timerId);
   }, [searchTerm]);
 
-
   useEffect(() => {
-    console.log(`Search or sort changed - search: "${debouncedSearchTerm}", sort: ${sortBy}`);
-    fetchMovies(1, debouncedSearchTerm, sortBy, ITEMS_PER_PAGE);
+    setMovies([]);
+    setOffset(0);
+    setHasMore(true);
+    fetchMovies(0);
   }, [debouncedSearchTerm, sortBy]);
 
+  const fetchMovies = useCallback(async (newOffset) => {
+    setLoading(true);
+    try {
+      const response = await fetchMoviesFromStore(newOffset, debouncedSearchTerm, sortBy, LIMIT);
+      if (newOffset === 0) {
+        setMovies(response.movies);
+      } else {
+        setMovies((prevMovies) => [...prevMovies, ...response.movies]);
+      }
+      setOffset(newOffset + LIMIT);
+      if (response.movies.length < LIMIT) {
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error('Error fetching movies:', error);
+      setHasMore(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [debouncedSearchTerm, sortBy, fetchMoviesFromStore]);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
-
-  const handlePageChange = (page) => {
-    console.log(`Changing to page ${page}`);
-    useMovieStore.setState({ currentPage: page });
-    fetchMovies(page, debouncedSearchTerm, sortBy, ITEMS_PER_PAGE);
-  };
-
 
   const handleSearch = (e) => {
     const value = e.target.value;
@@ -68,14 +77,16 @@ function MovieList() {
   const handleDeleteMovie = (id) => {
     if (window.confirm('Are you sure you want to delete this movie?')) {
       deleteMovie(id).then(() => {
-
-        fetchMovies(currentPage, debouncedSearchTerm, sortBy, ITEMS_PER_PAGE);
+        setMovies([]);
+        setOffset(0);
+        setHasMore(true);
+        fetchMovies(0);
       });
     }
   };
+
   const getStatusColor = (status) => {
     if (!status) return '#9e9e9e';
-
     switch (status.toLowerCase()) {
       case 'watched': return '#4caf50';
       case 'watching': return '#2196f3';
@@ -88,39 +99,39 @@ function MovieList() {
     const stars = [];
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating % 1 >= 0.5;
-
     for (let i = 0; i < fullStars; i++) {
       stars.push('★');
     }
-
     if (hasHalfStar) {
       stars.push('✫');
     }
-
     while (stars.length < 5) {
       stars.push('☆');
     }
-
     return stars.join('');
   };
-  const totalPages = Math.ceil(totalMovies / ITEMS_PER_PAGE) || 1;
 
-  console.log('Render state:', {
-    movies: movies.length,
-    totalMovies,
-    currentPage,
-    search: debouncedSearchTerm,
-    sort: sortBy
-  });
+  useEffect(() => {
+    const handleScroll = () => {
+      if (listRef.current) {
+        const { scrollTop, clientHeight, scrollHeight } = listRef.current;
+        if (scrollHeight - scrollTop <= clientHeight + 20 && hasMore && !loading) {
+          fetchMovies(offset);
+        }
+      }
+    };
+    if (listRef.current) {
+      listRef.current.addEventListener('scroll', handleScroll);
+    }
+    return () => {
+      if (listRef.current) {
+        listRef.current.removeEventListener('scroll', handleScroll);
+      }
+    };
+  }, [fetchMovies, offset, hasMore, loading]);
 
   return (
-    <div style={{
-      maxWidth: '1200px',
-      margin: '0 auto',
-      padding: '20px',
-      fontFamily: 'Arial, sans-serif'
-    }}>
-
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px', fontFamily: 'Arial, sans-serif' }}>
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -143,15 +154,7 @@ function MovieList() {
           }}>Logout</button>
         </div>
       </div>
-
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '24px',
-        flexWrap: 'wrap',
-        gap: '16px'
-      }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <button onClick={() => setShowForm(true)} style={{
           background: '#4CAF50',
           color: 'white',
@@ -169,8 +172,6 @@ function MovieList() {
         }}>
           <span style={{ marginRight: '2px', fontSize: '14px' }}>+</span> Add Movie
         </button>
-
-
 
         <div style={{ display: 'flex', gap: '16px' }}>
           <div style={{ position: 'relative' }}>
@@ -225,13 +226,13 @@ function MovieList() {
           </div>
         </div>
       </div>
-
-
-      <div style={{
+      <div ref={listRef} style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
         gap: '20px',
-        marginBottom: '24px'
+        marginBottom: '24px',
+        maxHeight: '80vh',
+        overflowY: 'auto'
       }}>
         {movies.length > 0 ? (
           movies.map((movie) => (
@@ -243,7 +244,6 @@ function MovieList() {
               transition: 'transform 0.3s ease',
               position: 'relative'
             }}>
-
               <div style={{
                 backgroundColor: getStatusColor(movie.status),
                 color: 'white',
@@ -255,7 +255,6 @@ function MovieList() {
                   <span>{movie.release_year}</span>
                 </div>
               </div>
-
               <div style={{ padding: '16px' }}>
                 <h3 style={{ margin: '0 0 12px 0', fontSize: '18px' }}>{movie.title}</h3>
                 <div style={{ marginBottom: '8px' }}>
@@ -277,8 +276,6 @@ function MovieList() {
                 }}>
                   {renderStars(movie.rating)}
                 </div>
-
-
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -330,60 +327,7 @@ function MovieList() {
         )}
       </div>
 
-
-      {totalMovies > 0 && (
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          marginTop: '24px',
-          gap: '12px'
-        }}>
-
-          <button
-            onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
-            disabled={currentPage === 1}
-            style={{
-              backgroundColor: currentPage === 1 ? '#ccc' : '#007bff',
-              color: 'white',
-              border: 'none',
-              padding: '6px 10px',
-              borderRadius: '4px',
-              width: '70px',
-              fontSize: '14px',
-              cursor: currentPage === 1 ? 'default' : 'pointer',
-              opacity: currentPage === 1 ? 0.5 : 1
-            }}
-          >
-            &laquo; Prev
-          </button>
-
-
-          <div style={{ color: '#555', fontWeight: 'bold', fontSize: '14px' }}>
-            Page {currentPage} of {totalPages}
-          </div>
-
-
-          <button
-            onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
-            disabled={currentPage === totalPages}
-            style={{
-              backgroundColor: currentPage === totalPages ? '#ccc' : '#007bff',
-              color: 'white',
-              border: 'none',
-              padding: '6px 10px',
-              borderRadius: '4px',
-              width: '70px',
-              fontSize: '14px',
-              cursor: currentPage === totalPages ? 'default' : 'pointer',
-              opacity: currentPage === totalPages ? 0.5 : 1
-            }}
-          >
-            Next &raquo;
-          </button>
-        </div>
-      )}
-
+      {loading && <p style={{ textAlign: 'center' }}>Loading more movies...</p>}
 
       {totalMovies > 0 && (
         <div style={{ textAlign: 'center', marginTop: '16px', color: '#777', fontSize: '14px' }}>
@@ -431,17 +375,18 @@ function MovieList() {
                 color: '#666'
               }}
             >
-
+              ×
             </button>
             <MovieForm
               movie={selectedMovie}
               onClose={(wasModified) => {
                 setShowForm(false);
                 setSelectedMovie(null);
-
-
                 if (wasModified) {
-                  fetchMovies(currentPage, debouncedSearchTerm, sortBy, ITEMS_PER_PAGE);
+                  setMovies([]);
+                  setOffset(0);
+                  setHasMore(true);
+                  fetchMovies(0);
                 }
               }}
             />
